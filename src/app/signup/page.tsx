@@ -7,6 +7,9 @@ import { supabase } from '@/lib/supabaseClient';
 export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Ask the user for a display name to store in their profile. This will be used
+  // as the default name when they create matches or tournaments.
+  const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const router = useRouter();
@@ -14,19 +17,26 @@ export default function SignupPage() {
   const handleSignup = async () => {
     setError(null);
     setMessage(null);
-    const { error } = await supabase.auth.signUp({
+    // Send the sign up request to Supabase Auth. We also capture the returned
+    // user data so we can insert the display name into the `profiles` table.
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
     });
-    if (error) {
-      setError(error.message);
-    } else {
-      // On successful sign up Supabase sends a confirmation email. Show a message
-      // instead of redirecting immediately so the user can confirm their address.
-      setMessage('Registro exitoso. Revisa tu correo para confirmar tu cuenta.');
-      setEmail('');
-      setPassword('');
+    if (signUpError) {
+      setError(signUpError.message);
+      return;
     }
+    // On successful sign up Supabase sends a confirmation email. We also persist
+    // the provided display name into the `profiles` table for the new user.
+    const userId = signUpData?.user?.id;
+    if (userId) {
+      await supabase.from('profiles').upsert({ id: userId, display_name: displayName });
+    }
+    setMessage('Registro exitoso. Revisa tu correo para confirmar tu cuenta.');
+    setEmail('');
+    setPassword('');
+    setDisplayName('');
   };
 
   return (
@@ -34,6 +44,13 @@ export default function SignupPage() {
       <h1 className="text-3xl font-bold text-center mb-4">Crear cuenta</h1>
       {error && <p className="text-red-500 text-sm">{error}</p>}
       {message && <p className="text-green-500 text-sm">{message}</p>}
+      <input
+        type="text"
+        placeholder="Nombre (display name)"
+        value={displayName}
+        onChange={(e) => setDisplayName(e.target.value)}
+        className="bg-card border border-gray-700 rounded p-3 w-full text-text placeholder-gray-500 focus:outline-none"
+      />
       <input
         type="email"
         placeholder="Correo electrónico"
